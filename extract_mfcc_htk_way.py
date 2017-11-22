@@ -17,6 +17,13 @@ import essentia.standard as ess
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+
+def preemph(x, alpha):
+    y = x[1:] - alpha * x[:-1]
+    return y
+
+
 def extractor(filename, PREEMPH):    
 
     fs = 44100
@@ -24,7 +31,10 @@ def extractor(filename, PREEMPH):
                                           sampleRate = fs)()
     # dynamic range expansion as done in HTK implementation
     audio = audio*2**15
-
+    
+    # VARIANT 1
+#     audio = preemph(audio, PREEMPH)
+    
     frameSize = 1102 # corresponds to htk default WINDOWSIZE = 250000.0 
     hopSize = 441 # corresponds to htk default TARGETRATE = 100000.0
     fftSize = 2048
@@ -52,15 +62,22 @@ def extractor(filename, PREEMPH):
                         logType = 'log',
                         liftering = 22) # corresponds to htk default CEPLIFTER = 22
 
-    preemph_filter = ess.IIR(numerator=[1-PREEMPH])
+    preemph_filter = ess.IIR(numerator=[1.,-PREEMPH])
     mfccs = []
     # startFromZero = True, validFrameThresholdRatio = 1 : the way htk computes windows
     for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize , startFromZero = True, validFrameThresholdRatio = 1):
-        if PREEMPH != 0:
-           frame_doubled_first = np.insert(frame,0,frame[0])  ##### if PREEMPHASIS needed
-           preemph_frame = preemph_filter(frame_doubled_first)
-           frame = preemph_frame[1:]
-        
+            
+
+#             frame_doubled_first = np.insert(frame,0,frame[0])  ##### if PREEMPHASIS needed
+#             preemph_frame = preemph_filter(frame_doubled_first)
+#             frame = preemph_frame[1:]
+            
+            # VARIANT 2
+        frame_doubled_first = np.insert(frame,0,frame[0])  ##### need an additional sample to compensate for the one lost in preemphasis
+        frame = preemph(frame_doubled_first, PREEMPH)
+
+
+           
         spect = spectrum(w(frame))
         mel_bands, mfcc_coeffs = mfcc_htk(spect)
         mfccs.append(mfcc_coeffs)
